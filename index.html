@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AP Practice Tests</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+  :root {
+    --paper: #F6F7F2;
+    --paper-dim: #EBEEE4;
+    --card: #FFFFFF;
+    --ink: #1B2420;
+    --ink-soft: #6E786F;
+    --border: #DCE2D6;
+    --blue: #1F5FCC;
+    --blue-dark: #17439A;
+    --blue-soft: #E6EDFB;
+    --green: #1E8F5F;
+    --green-dark: #156C47;
+    --green-soft: #E3F3EA;
+    --correct: var(--green);
+    --correct-soft: var(--green-soft);
+    --incorrect: #C0472B;
+    --incorrect-soft: #FBEAE3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    margin: 0;
+    padding: 40px 20px 80px;
+  }
+  .qs-serif { font-family: 'Fraunces', serif; }
+  .qs-wrap { max-width: 760px; margin: 0 auto; }
+  .qs-wrap-admin { max-width: 1000px; margin: 0 auto; }
+  .qs-btn {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--ink);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .qs-btn:hover { border-color: var(--ink-soft); }
+  .qs-btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .qs-btn-primary:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+  .qs-btn-green { background: var(--green); border-color: var(--green); color: #fff; }
+  .qs-btn-green:hover { background: var(--green-dark); border-color: var(--green-dark); }
+  .qs-btn-danger { background: var(--card); border-color: #FCA5A5; color: var(--incorrect); }
+  .qs-btn-danger:hover { background: var(--incorrect-soft); border-color: var(--incorrect); }
+  .qs-btn-ghost { border-color: transparent; background: transparent; }
+  .qs-btn-ghost:hover { background: var(--paper-dim); border-color: transparent; }
+  .qs-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .qs-input, .qs-textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 15px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--ink);
+  }
+  .qs-input:focus, .qs-textarea:focus, .qs-btn:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+  }
+  .qs-textarea { resize: vertical; min-height: 44px; font-family: inherit; }
+  select.qs-input { cursor: pointer; }
+  .qs-grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .fmt-btn {
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--card);
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .fmt-btn:hover { background: var(--paper-dim); }
+  @media (max-width: 768px) {
+    .qs-grid-2col { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="qs-wrap" id="app"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SECRET_KEY = "AP2026";
+  var FIREBASE_BASE = "https://ap-quizzes-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+  var SUBJECTS = [
+    { id: "chem", label: "AP Chemistry", color: "#2F6FED" },
+    { id: "bio", label: "AP Biology", color: "#1E8F5F" },
+    { id: "elac", label: "AP English Lang & Comp", color: "#A0518F" },
+    { id: "calcbc", label: "AP Calculus BC", color: "#D98A2B" },
+    { id: "physics", label: "AP Physics", color: "#1AA6B7" },
+    { id: "stats", label: "AP Statistics", color: "#5B5FA8" },
+    { id: "macro", label: "AP Macroeconomics", color: "#B5652F" },
+  ];
+
+  function subjectInfo(id) {
+    for (var i = 0; i < SUBJECTS.length; i++) if (SUBJECTS[i].id === id) return SUBJECTS[i];
+    return SUBJECTS[0];
+  }
+
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+
+  function esc(str) {
+    return String(str == null ? "" : str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderFormattedText(str) {
+    var escaped = esc(str);
+    return escaped
+      .replace(/&lt;sup&gt;(.*?)&lt;\/sup&gt;/gi, "<sup>$1</sup>")
+      .replace(/&lt;sub&gt;(.*?)&lt;\/sub&gt;/gi, "<sub>$1</sub>");
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function blankQuestion(type) {
+    type = type || "mcq";
+    if (type === "frq") {
+      return { id: uid(), type: "frq", prompt: "", image: null, sampleAnswer: "" };
+    }
+    return {
+      id: uid(), type: "mcq", prompt: "", image: null,
+      options: ["", "", "", ""], optionImages: [null, null, null, null],
+      correctIndex: 0, whyCorrect: "", whyWrong: ["", "", "", ""],
+    };
+  }
+
+  function blankQuiz() {
+    return { id: uid(), title: "", subject: SUBJECTS[0].id, questions: [blankQuestion("mcq")] };
+  }
+
+  function normalizeQuizData(data) {
+    var list = [];
+    if (!data) return list;
+
+    if (Array.isArray(data)) {
+      data.forEach(function (item, index) {
+        if (item) {
+          if (!item.id) item.id = String(index);
+          if (!item.questions) item.questions = [];
+          list.push(item);
+        }
+      });
+      return list;
+    }
+
+    Object.keys(data).forEach(function (key) {
+      var item = data[key];
+      if (item) {
+        item.id = key;
+        if (!item.questions) item.questions = [];
+        list.push(item);
+      }
+    });
+    return list;
+  }
+
+  var state = {
+    quizzes: [],
+    loading: true,
+    view: "library",
+    filter: "all",
+    draft: null,
+    playState: null,
+    nameDraft: "",
+    saveError: false,
+    titleClicks: 0,
+    titleClickTimer: null,
+  };
+
+  function fetchQuizzes() {
+    state.loading = true;
+    render();
+    fetch(FIREBASE_BASE + "/quizzes.json")
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        state.quizzes = normalizeQuizData(data);
+        state.loading = false;
+        render();
+      })
+      .catch(function () {
+        state.loading = false;
+        state.saveError = true;
+        render();
+      });
+  }
+
+  function saveQuizToFirebase(quiz) {
+    var url = FIREBASE_BASE + "/quizzes/" + quiz.id + ".json";
+    return fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(quiz),
+    });
+  }
+
+  function deleteQuizFromFirebase(id) {
+    return fetch(FIREBASE_BASE + "/quizzes/" + id + ".json", {
+      method: "DELETE",
+    });
+  }
+
+  function render() {
+    var app = document.getElementById("app");
+    if (state.view === "editor") {
+      app.className = "qs-wrap-admin";
+      app.innerHTML = renderEditor();
+    } else if (state.view === "play") {
+      app.className = "qs-wrap";
+      app.innerHTML = renderPlay();
+    } else {
+      app.className = "qs-wrap";
+      app.innerHTML = renderLibrary();
+    }
+  }
+
+  function renderLibrary() {
+    if (state.loading) {
+      return '<div style="text-align:center;padding:60px 0;color:var(--ink-soft);">Loading practice tests from database…</div>';
+    }
+
+    var quizzes = state.quizzes, filter = state.filter;
+    var visible = filter === "all" ? quizzes : quizzes.filter(function (q) { return q.subject === filter; });
+    var presentSubjects = SUBJECTS.filter(function (s) {
+      return quizzes.some(function (q) { return q.subject === s.id; });
+    });
+
+    var tabsHtml = "";
+    if (presentSubjects.length) {
+      tabsHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;">' +
+        filterTab("all", "All", "var(--ink-soft)", filter === "all") +
+        presentSubjects.map(function (s) { return filterTab(s.id, s.label, s.color, filter === s.id); }).join("") +
+        "</div>";
+    }
+
+    var listHtml;
+    if (visible.length === 0) {
+      listHtml = '<div style="border:1px dashed var(--border);border-radius:10px;padding:48px 24px;text-align:center;color:var(--ink-soft);">' +
+        '<div style="margin-bottom:10px;opacity:0.6;font-size:22px;">&#128214;</div>' +
+        "<div>" + (quizzes.length === 0 ? "No practice tests available." : "No practice tests in this subject yet.") + "</div>" +
+        "</div>";
+    } else {
+      listHtml = '<div style="display:flex;flex-direction:column;gap:10px;">' + visible.map(quizRow).join("") + "</div>";
+    }
+
+    return '' +
+      '<div style="margin-bottom:20px;">' +
+        '<div style="display:flex;gap:4px;margin-bottom:10px;">' +
+          '<span style="width:22px;height:4px;border-radius:2px;background:var(--blue);display:inline-block;"></span>' +
+          '<span style="width:22px;height:4px;border-radius:2px;background:var(--green);display:inline-block;"></span>' +
+        '</div>' +
+        '<h1 class="qs-serif" data-action="secret-title-click" style="font-size:32px;font-weight:600;margin:0;cursor:pointer;user-select:none;">AP Practice Tests</h1>' +
+        '<p style="color:var(--ink-soft);margin:6px 0 0;font-size:15px;">Practice tests for AP subjects — multiple choice or free response.</p>' +
+      '</div>' +
+      tabsHtml +
+      (state.saveError ? '<div style="font-size:13px;color:var(--incorrect);margin-bottom:16px;">Failed to connect to Firebase database. Check your internet connection.</div>' : '') +
+      listHtml;
+  }
+
+  function filterTab(id, label, color, active) {
+    return '<button class="qs-btn qs-btn-ghost" data-action="filter" data-subject="' + esc(id) + '" style="padding:6px 12px;font-size:13px;border-radius:999px;border:1px solid ' +
+      (active ? color : "var(--border)") + ';background:' + (active ? color + "1A" : "transparent") + ';color:' + (active ? color : "var(--ink-soft)") + ';">' +
+      esc(label) + '</button>';
+  }
+
+  function quizRow(quiz) {
+    var subj = subjectInfo(quiz.subject);
+    var qCount = quiz.questions ? quiz.questions.length : 0;
+    return '' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:10px;padding:16px 18px;background:var(--card);flex-wrap:wrap;gap:10px;">' +
+      '<div>' +
+        '<div style="font-weight:600;font-size:16px;">' + renderFormattedText(quiz.title) + '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
+          '<span style="font-size:12px;font-weight:500;color:' + subj.color + ';background:' + subj.color + '1A;border-radius:999px;padding:2px 8px;">' + esc(subj.label) + '</span>' +
+          '<span style="color:var(--ink-soft);font-size:13px;">' + qCount + ' question' + (qCount !== 1 ? 's' : '') + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div>' +
+        '<button class="qs-btn qs-btn-primary" data-action="play-quiz" data-id="' + esc(quiz.id) + '">Start</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderEditor() {
+    var d = state.draft;
+    var questionsHtml = d.questions.map(function (q, qi) { return questionCard(q, qi, d.questions.length); }).join("");
+
+    var optionsHtml = SUBJECTS.map(function (s) {
+      return '<option value="' + esc(s.id) + '" ' + (s.id === d.subject ? "selected" : "") + '>' + esc(s.label) + '</option>';
+    }).join("");
+
+    var currentQuizzesHtml = state.quizzes.length === 0 ?
+      '<div style="color:var(--ink-soft);font-size:14px;padding:12px 0;">No existing practice tests.</div>' :
+      state.quizzes.map(function (q) {
+        var subj = subjectInfo(q.subject);
+        var isEditing = d.id === q.id;
+        var qCount = q.questions ? q.questions.length : 0;
+        return '' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">' +
+          '<div>' +
+            '<div style="font-weight:600;font-size:14px;">' + renderFormattedText(q.title) + (isEditing ? ' <span style="font-size:11px;color:var(--blue);">(Editing)</span>' : '') + '</div>' +
+            '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">' + esc(subj.label) + ' &bull; ' + qCount + ' questions</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:4px;">' +
+            '<button class="qs-btn" data-action="select-edit-quiz" data-id="' + esc(q.id) + '" style="padding:6px 10px;font-size:12px;">Edit</button>' +
+            '<button class="qs-btn qs-btn-danger" data-action="delete-quiz-editor" data-id="' + esc(q.id) + '" style="padding:6px 10px;font-size:12px;">Delete</button>' +
+          '</div>' +
+        '</div>';
+      }).join("");
+
+    return '' +
+      '<button class="qs-btn qs-btn-ghost" data-action="back-to-library" style="margin-bottom:18px;">&larr; Back to practice tests</button>' +
+      '<div class="qs-grid-2col">' +
+        '<div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+            '<h3 class="qs-serif" style="margin:0;font-size:20px;">' + (state.quizzes.some(function (q) { return q.id === d.id; }) ? "Edit Quiz" : "Create New Quiz") + '</h3>' +
+            (state.quizzes.some(function (q) { return q.id === d.id; }) ? '<button class="qs-btn qs-btn-ghost" data-action="reset-to-new-draft" style="font-size:12px;">+ New Quiz</button>' : '') +
+          '</div>' +
+          '<input class="qs-input qs-serif" style="font-size:20px;font-weight:600;padding:10px 12px;margin-bottom:12px;" placeholder="Practice test title" value="' + esc(d.title) + '" data-field="title" />' +
+          '<select class="qs-input" style="margin-bottom:20px;" data-field="subject">' + optionsHtml + '</select>' +
+          (d.error ? '<div style="font-size:13px;color:var(--incorrect);margin-bottom:16px;">' + esc(d.error) + '</div>' : '') +
+          '<div style="display:flex;flex-direction:column;gap:16px;">' + questionsHtml + '</div>' +
+          '<div style="display:flex;justify-content:space-between;margin-top:20px;flex-wrap:wrap;gap:10px;">' +
+            '<div style="display:flex;gap:8px;">' +
+              '<button class="qs-btn" data-action="add-question" data-type="mcq">+ Add MC</button>' +
+              '<button class="qs-btn" data-action="add-question" data-type="frq">+ Add FRQ</button>' +
+            '</div>' +
+            '<button class="qs-btn qs-btn-primary" data-action="save-quiz">Save practice test</button>' +
+          '</div>' +
+        '</div>' +
+        '<div style="border:1px solid var(--border);border-radius:10px;padding:18px;background:var(--card);height:fit-content;">' +
+          '<h3 class="qs-serif" style="margin:0 0 16px 0;font-size:20px;">Current Quizzes</h3>' +
+          currentQuizzesHtml +
+        '</div>' +
+      '</div>';
+  }
+
+  function imagePicker(image, action, qi, oi, label, compact) {
+    var oiAttr = oi != null ? ' data-oi="' + oi + '"' : '';
+    if (image) {
+      var removeAction = action === "q-image" ? "remove-q-image" : "remove-opt-image";
+      var h = compact ? 34 : 96, w = compact ? 34 : 220;
+      return '' +
+        '<span style="position:relative;display:inline-block;' + (compact ? '' : 'margin-top:4px;') + '">' +
+          '<img src="' + image + '" style="height:' + h + 'px;max-width:' + w + 'px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:block;" />' +
+          '<button data-action="' + removeAction + '" data-qi="' + qi + '"' + oiAttr + ' style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--incorrect);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:11px;line-height:1;">&times;</button>' +
+        '</span>';
+    }
+    return '' +
+      '<label class="qs-btn qs-btn-ghost" style="cursor:pointer;font-size:' + (compact ? 0 : 13) + 'px;color:var(--ink-soft);padding:' + (compact ? '8px' : '6px 10px') + ';flex-shrink:0;" title="' + esc(label) + '">' +
+        '<input type="file" accept="image/*" style="display:none;" data-action="' + action + '" data-qi="' + qi + '"' + oiAttr + ' />' +
+        '&#128247; ' + (compact ? '' : esc(label)) +
+      '</label>';
+  }
+
+  function fmtToolbar(targetId) {
+    return '' +
+      '<div style="display:flex;gap:4px;margin-bottom:4px;">' +
+        '<button type="button" class="fmt-btn" data-action="insert-tag" data-target="' + targetId + '" data-tag="sup">x² Exponent</button>' +
+        '<button type="button" class="fmt-btn" data-action="insert-tag" data-target="' + targetId + '" data-tag="sub">H₂O Subscript</button>' +
+      '</div>';
+  }
+
+  function questionCard(q, qi, total) {
+    var typeLabel = q.type === "frq" ? "Free response" : "Multiple choice";
+    var typeColor = q.type === "frq" ? "var(--green)" : "var(--blue)";
+    var typeBg = q.type === "frq" ? "var(--green-soft)" : "var(--blue-soft)";
+
+    var promptId = "prompt-" + qi;
+    var sampleId = "sample-" + qi;
+    var whyCorrectId = "whyCorrect-" + qi;
+
+    var body;
+    if (q.type === "frq") {
+      body = '' +
+        '<div style="margin-top:14px;">' +
+          fmtToolbar(sampleId) +
+          '<textarea id="' + sampleId + '" class="qs-textarea" placeholder="Model answer or grading/rubric notes (optional)" data-field="sampleAnswer" data-qi="' + qi + '" style="font-size:13px;background:var(--green-soft);border:1px solid transparent;">' + esc(q.sampleAnswer) + '</textarea>' +
+        '</div>';
+    } else {
+      var optsHtml = q.options.map(function (opt, oi) { return optionRow(q, qi, opt, oi); }).join("");
+      body = '' +
+        '<div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">' + optsHtml + '</div>' +
+        '<div style="margin-top:12px;">' +
+          fmtToolbar(whyCorrectId) +
+          '<input id="' + whyCorrectId + '" class="qs-input" placeholder="Why the correct answer is right (optional)" value="' + esc(q.whyCorrect) + '" data-field="whyCorrect" data-qi="' + qi + '" style="font-size:13px;background:var(--correct-soft);border:1px solid transparent;" />' +
+        '</div>';
+    }
+
+    return '' +
+    '<div style="border:1px solid var(--border);border-radius:10px;padding:18px;background:var(--card);">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-weight:600;font-size:13px;color:var(--ink-soft);">Question ' + (qi + 1) + '</span>' +
+          '<span style="font-size:11px;font-weight:500;color:' + typeColor + ';background:' + typeBg + ';border-radius:999px;padding:2px 8px;">' + typeLabel + '</span>' +
+        '</div>' +
+        (total > 1 ? '<button class="qs-btn qs-btn-ghost" data-action="remove-question" data-qi="' + qi + '">&#128465;</button>' : '') +
+      '</div>' +
+      fmtToolbar(promptId) +
+      '<textarea id="' + promptId + '" class="qs-textarea" placeholder="What\'s the question?" data-field="prompt" data-qi="' + qi + '" style="margin-bottom:10px;">' + esc(q.prompt) + '</textarea>' +
+      imagePicker(q.image, "q-image", qi, null, "Add image to question", false) +
+      body +
+    '</div>';
+  }
+
+  function optionRow(q, qi, opt, oi) {
+    var isCorrect = q.correctIndex === oi;
+    var optId = "opt-" + qi + "-" + oi;
+    var wrongId = "wrong-" + qi + "-" + oi;
+
+    var wrongField = isCorrect ? '' :
+      '<div style="margin-top:6px;margin-left:34px;width:calc(100% - 34px);">' +
+        fmtToolbar(wrongId) +
+        '<input id="' + wrongId + '" class="qs-input" placeholder="Why this option is wrong (optional)" value="' + esc(q.whyWrong && q.whyWrong[oi] ? q.whyWrong[oi] : "") + '" data-field="whyWrong" data-qi="' + qi + '" data-oi="' + oi + '" style="font-size:13px;color:var(--ink-soft);background:var(--paper-dim);border:1px solid transparent;" />' +
+      '</div>';
+
+    return '' +
+    '<div>' +
+      '<div style="display:flex;gap:8px;align-items:center;">' +
+        '<button data-action="set-correct" data-qi="' + qi + '" data-oi="' + oi + '" style="flex-shrink:0;width:26px;height:26px;border-radius:50%;border:1.5px solid ' + (isCorrect ? "var(--correct)" : "var(--border)") + ';background:' + (isCorrect ? "var(--correct-soft)" : "transparent") + ';color:var(--correct);display:flex;align-items:center;justify-content:center;cursor:pointer;">' + (isCorrect ? '&check;' : '') + '</button>' +
+        '<div style="flex-grow:1;">' +
+          fmtToolbar(optId) +
+          '<input id="' + optId + '" class="qs-input" placeholder="Option ' + (oi + 1) + '" value="' + esc(opt) + '" data-field="optText" data-qi="' + qi + '" data-oi="' + oi + '" />' +
+        '</div>' +
+        imagePicker(q.optionImages && q.optionImages[oi], "opt-image", qi, oi, "Add image", true) +
+      '</div>' +
+      wrongField +
+    '</div>';
+  }
+
+  function renderPlay() {
+    var ps = state.playState;
+    if (!ps.nameConfirmed) return renderNameGate(ps.quiz.title);
+    if (ps.finished) return renderResults(ps);
+    return renderQuestion(ps);
+  }
+
+  function renderNameGate(quizTitle) {
+    return '' +
+    '<div style="max-width:400px;margin:70px auto 0;text-align:center;">' +
+      '<button class="qs-btn qs-btn-ghost" data-action="exit-play" style="float:left;margin-bottom:10px;">&larr; Back</button>' +
+      '<div style="clear:both;padding-top:10px;">' +
+        '<div style="display:flex;gap:4px;justify-content:center;margin-bottom:16px;">' +
+          '<span style="width:22px;height:4px;border-radius:2px;background:var(--blue);display:inline-block;"></span>' +
+          '<span style="width:22px;height:4px;border-radius:2px;background:var(--green);display:inline-block;"></span>' +
+        '</div>' +
+        '<h2 class="qs-serif" style="font-size:26px;font-weight:600;margin-bottom:8px;">Who\'s taking this test?</h2>' +
+        '<p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;line-height:1.5;">Enter your name before starting "' + renderFormattedText(quizTitle) + '".</p>' +
+      '</div>' +
+      '<input class="qs-input" placeholder="Sophea" value="' + esc(state.nameDraft) + '" data-field="nameDraft" style="margin-bottom:14px;text-align:center;" autofocus />' +
+      '<button class="qs-btn qs-btn-primary" style="width:100%;justify-content:center;" data-action="begin-test">Begin test &rarr;</button>' +
+    '</div>';
+  }
+
+  function saveFinalResultToFirebase(ps) {
+    var payload = {
+      studentName: ps.studentName || "Unknown",
+      quizTitle: ps.quiz.title,
+      subject: ps.quiz.subject,
+      mcqCorrect: ps.mcqCorrect,
+      mcqTotal: ps.mcqTotal,
+      frqCorrect: ps.frqCorrect,
+      frqTotal: ps.frqTotal,
+      totalCorrect: ps.totalCorrect,
+      totalQuestions: ps.totalQuestions,
+      answers: ps.userAnswers,
+      submittedAt: new Date().toISOString()
+    };
+    fetch(FIREBASE_BASE + "/quiz-results.json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).catch(function () {});
+  }
+
+  function renderResults(ps) {
+    var breakdownHtml = ps.userAnswers.map(function (ans, idx) {
+      var isCorrect = ans.isCorrect;
+      var statusTag = isCorrect ?
+        '<span style="color:var(--correct);background:var(--correct-soft);border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600;">Correct</span>' :
+        '<span style="color:var(--incorrect);background:var(--incorrect-soft);border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600;">Incorrect</span>';
+
+      var detailsHtml = "";
+      if (ans.type === "mcq") {
+        var chosenText = ans.selectedIdx !== null ? ans.options[ans.selectedIdx] : "No answer";
+        var correctText = ans.options[ans.correctIdx];
+        detailsHtml = '' +
+          '<div style="font-size:13px;margin-top:6px;line-height:1.4;">' +
+            (isCorrect ?
+              '<div><strong>Your Answer:</strong> ' + renderFormattedText(chosenText) + '</div>' :
+              '<div><strong style="color:var(--incorrect);">Your Answer:</strong> ' + renderFormattedText(chosenText) + '</div>' +
+              '<div><strong style="color:var(--correct);">Correct Answer:</strong> ' + renderFormattedText(correctText) + '</div>') +
+            (ans.whyCorrect ? '<div style="color:var(--ink-soft);margin-top:4px;"><em>Explanation:</em> ' + renderFormattedText(ans.whyCorrect) + '</div>' : '') +
+          '</div>';
+      } else {
+        detailsHtml = '' +
+          '<div style="font-size:13px;margin-top:6px;line-height:1.4;">' +
+            '<div><strong>Your Response:</strong> ' + renderFormattedText(ans.frqResponse || "None") + '</div>' +
+            (ans.sampleAnswer ? '<div style="color:var(--ink-soft);margin-top:4px;"><em>Model Answer:</em> ' + renderFormattedText(ans.sampleAnswer) + '</div>' : '') +
+          '</div>';
+      }
+
+      return '' +
+        '<div style="text-align:left;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--card);">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+            '<span style="font-weight:600;font-size:14px;">Q' + (idx + 1) + '. ' + renderFormattedText(ans.prompt) + '</span>' +
+            statusTag +
+          '</div>' +
+          detailsHtml +
+        '</div>';
+    }).join("");
+
+    var mcqScoreText = ps.mcqTotal > 0 ? ps.mcqCorrect + " / " + ps.mcqTotal : "N/A";
+    var frqScoreText = ps.frqTotal > 0 ? ps.frqCorrect + " / " + ps.frqTotal : "N/A";
+
+    return '' +
+    '<div style="text-align:center;padding:40px 0;">' +
+      '<div class="qs-serif" style="font-size:36px;font-weight:600;margin-bottom:6px;">' + ps.totalCorrect + ' / ' + ps.totalQuestions + ' Total Score</div>' +
+      '<p style="color:var(--ink-soft);margin-bottom:20px;">' + esc(ps.studentName) + ' completed "' + renderFormattedText(ps.quiz.title) + '".</p>' +
+      '<div style="display:flex;justify-content:center;gap:16px;margin-bottom:28px;">' +
+        '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 18px;background:var(--card);">' +
+          '<div style="font-size:12px;color:var(--ink-soft);font-weight:600;">MCQ Score</div>' +
+          '<div style="font-size:18px;font-weight:600;color:var(--blue);">' + mcqScoreText + '</div>' +
+        '</div>' +
+        '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 18px;background:var(--card);">' +
+          '<div style="font-size:12px;color:var(--ink-soft);font-weight:600;">FRQ Score</div>' +
+          '<div style="font-size:18px;font-weight:600;color:var(--green);">' + frqScoreText + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="max-width:680px;margin:0 auto 24px auto;">' +
+        '<h3 class="qs-serif" style="text-align:left;font-size:20px;margin-bottom:12px;">Detailed Breakdown</h3>' +
+        breakdownHtml +
+      '</div>' +
+      '<div style="display:flex;gap:10px;justify-content:center;">' +
+        '<button class="qs-btn" data-action="exit-play">&larr; Back to practice tests</button>' +
+        '<button class="qs-btn qs-btn-primary" data-action="restart-test">Retake test</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderQuestion(ps) {
+    var q = ps.quiz.questions[ps.index];
+    var isFrq = q.type === "frq";
+    var total = ps.quiz.questions.length;
+    var progressPct = ((ps.index + (ps.revealed ? 1 : 0)) / total) * 100;
+
+    var imageHtml = q.image ? '<img src="' + q.image + '" style="width:100%;max-height:320px;object-fit:contain;border-radius:10px;border:1px solid var(--border);margin-bottom:24px;background:var(--card);" />' : '';
+
+    var bodyHtml;
+    if (!isFrq) {
+      bodyHtml = (q.options || []).map(function (opt, oi) {
+        var optImages = q.optionImages || [];
+        var whyWrong = q.whyWrong || [];
+        if (!opt.trim() && !optImages[oi]) return "";
+        var isCorrectOpt = oi === q.correctIndex;
+        var isSelected = oi === ps.selected;
+        var borderColor = "var(--border)", bg = "var(--card)";
+        if (ps.revealed) {
+          if (isCorrectOpt) { borderColor = "var(--correct)"; bg = "var(--correct-soft)"; }
+          else if (isSelected) { borderColor = "var(--incorrect)"; bg = "var(--incorrect-soft)"; }
+        }
+        var icon = "";
+        if (ps.revealed && isCorrectOpt) icon = '<span style="color:var(--correct);">&check;</span>';
+        else if (ps.revealed && isSelected) icon = '<span style="color:var(--incorrect);">&#10005;</span>';
+        var optImg = optImages[oi] ? '<img src="' + optImages[oi] + '" style="height:40px;width:40px;object-fit:cover;border-radius:6px;flex-shrink:0;" />' : '';
+        var wrongNote = (ps.revealed && !isCorrectOpt && whyWrong[oi] && whyWrong[oi].trim()) ? '<div style="font-size:13px;color:var(--ink-soft);padding:6px 16px 0;">' + renderFormattedText(whyWrong[oi]) + '</div>' : '';
+        var correctNote = (ps.revealed && isCorrectOpt && q.whyCorrect && q.whyCorrect.trim()) ? '<div style="font-size:13px;color:var(--correct);padding:6px 16px 0;">' + renderFormattedText(q.whyCorrect) + '</div>' : '';
+        return '' +
+          '<div>' +
+            '<button class="qs-btn" data-action="choose-option" data-oi="' + oi + '" ' + (ps.revealed ? "disabled" : "") + ' style="width:100%;justify-space-between;padding:14px 16px;font-size:15px;border-color:' + borderColor + ';background:' + bg + ';cursor:' + (ps.revealed ? "default" : "pointer") + ';gap:12px;">' +
+              '<span style="display:flex;align-items:center;gap:12px;text-align:left;">' + optImg + '<span>' + renderFormattedText(opt) + '</span></span>' + icon +
+            '</button>' + wrongNote + correctNote +
+          '</div>';
+      }).join("");
+    } else if (!ps.revealed) {
+      bodyHtml = '' +
+        '<div>' +
+          '<textarea class="qs-textarea" placeholder="Type your response here…" data-field="frqResponse" style="min-height:160px;margin-bottom:12px;">' + esc(ps.frqResponse) + '</textarea>' +
+          '<div style="display:flex;justify-content:flex-end;">' +
+            '<button class="qs-btn qs-btn-green" data-action="submit-frq" ' + (!ps.frqResponse.trim() ? "disabled" : "") + '>&check; Submit response</button>' +
+          '</div>' +
+        '</div>';
+    } else {
+      var syncMsg = ps.frqSynced === true ? "Sent to database." :
+        ps.frqSynced === false ? "Couldn't send response." : "Sending…";
+      var syncColor = ps.frqSynced === false ? "var(--incorrect)" : "var(--ink-soft)";
+      bodyHtml = '' +
+        '<div>' +
+          '<div style="font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:6px;">Your response</div>' +
+          '<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:15px;white-space:pre-wrap;margin-bottom:8px;">' + renderFormattedText(ps.frqResponse) + '</div>' +
+          '<div style="font-size:12px;margin-bottom:16px;color:' + syncColor + ';">' + syncMsg + '</div>' +
+          '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px;">Model answer / rubric notes</div>' +
+          '<div style="border:1px solid var(--border);background:var(--green-soft);border-radius:8px;padding:12px 14px;font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:var(--ink);">' +
+            (q.sampleAnswer && q.sampleAnswer.trim() ? renderFormattedText(q.sampleAnswer) : "No rubric added.") +
+          '</div>' +
+          '<div style="display:flex;gap:8px;">' +
+            '<button class="qs-btn" data-action="grade-frq" data-correct="true" style="border-color:' + (ps.frqGrade === true ? "var(--correct)" : "var(--border)") + ';background:' + (ps.frqGrade === true ? "var(--correct-soft)" : "var(--card)") + ';color:' + (ps.frqGrade === true ? "var(--correct)" : "var(--ink)") + ';">&check; Correct</button>' +
+            '<button class="qs-btn" data-action="grade-frq" data-correct="false" style="border-color:' + (ps.frqGrade === false ? "var(--incorrect)" : "var(--border)") + ';background:' + (ps.frqGrade === false ? "var(--incorrect-soft)" : "var(--card)") + ';color:' + (ps.frqGrade === false ? "var(--incorrect)" : "var(--ink)") + ';">&#10005; Needs review</button>' +
+          '</div>' +
+        '</div>';
+    }
+
+    var nextBtn = ps.revealed ? '' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:24px;">' +
+        '<button class="qs-btn qs-btn-primary" data-action="next-question">' + (ps.index === total - 1 ? "See results" : "Next question") + ' &rarr;</button>' +
+      '</div>' : '';
+
+    return '' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">' +
+        '<button class="qs-btn qs-btn-ghost" data-action="exit-play">&larr; Exit</button>' +
+        '<div style="font-size:13px;color:var(--ink-soft);font-weight:500;text-align:right;">' +
+          '<div>' + esc(ps.studentName) + '</div>' +
+          '<div>Question ' + (ps.index + 1) + ' of ' + total + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="height:3px;background:var(--paper-dim);border-radius:2px;margin-bottom:28px;">' +
+        '<div style="height:100%;width:' + progressPct + '%;background:var(--blue);border-radius:2px;transition:width 0.3s ease;"></div>' +
+      '</div>' +
+      '<h2 class="qs-serif" style="font-size:24px;font-weight:600;margin-bottom:' + (q.image ? 16 : 24) + 'px;line-height:1.35;">' + renderFormattedText(q.prompt) + '</h2>' +
+      imageHtml +
+      '<div style="display:flex;flex-direction:column;gap:10px;">' + bodyHtml + '</div>' +
+      nextBtn;
+  }
+
+  function insertFormattingTag(targetId, tag) {
+    var inputEl = document.getElementById(targetId);
+    if (!inputEl) return;
+
+    var start = inputEl.selectionStart;
+    var end = inputEl.selectionEnd;
+    var val = inputEl.value;
+
+    var selectedText = val.substring(start, end);
+    var openTag = "<" + tag + ">";
+    var closeTag = "</" + tag + ">";
+    var replacement = openTag + (selectedText || "text") + closeTag;
+
+    inputEl.value = val.substring(0, start) + replacement + val.substring(end);
+    
+    var event = new Event("input", { bubbles: true });
+    inputEl.dispatchEvent(event);
+
+    inputEl.focus();
+    var newCursorPos = start + openTag.length + (selectedText ? selectedText.length : 4);
+    inputEl.setSelectionRange(newCursorPos, newCursorPos);
+  }
+
+  function handleTitleClick() {
+    state.titleClicks += 1;
+    if (state.titleClickTimer) clearTimeout(state.titleClickTimer);
+
+    if (state.titleClicks >= 3) {
+      state.titleClicks = 0;
+      var key = prompt("Enter password to open management dashboard:");
+      if (key === SECRET_KEY) {
+        state.draft = blankQuiz();
+        state.view = "editor";
+        render();
+      } else if (key !== null) {
+        alert("Incorrect password.");
+      }
+    } else {
+      state.titleClickTimer = setTimeout(function () {
+        state.titleClicks = 0;
+      }, 1000);
+    }
+  }
+
+  function doSelectEditQuizInEditor(id) {
+    var quiz = state.quizzes.find(function (q) { return String(q.id) === String(id); });
+    if (!quiz) return;
+    state.draft = JSON.parse(JSON.stringify(quiz));
+    render();
+  }
+
+  function doDeleteQuizFromEditor(id) {
+    if (confirm("Delete this practice test?")) {
+      deleteQuizFromFirebase(id).then(function () {
+        if (state.draft && String(state.draft.id) === String(id)) {
+          state.draft = blankQuiz();
+        }
+        fetchQuizzes();
+      });
+    }
+  }
+
+  function doCancelEdit() { state.draft = null; state.view = "library"; render(); }
+
+  function doAddQuestion(type) { state.draft.questions.push(blankQuestion(type)); render(); }
+
+  function doRemoveQuestion(qi) {
+    if (state.draft.questions.length > 1) { state.draft.questions.splice(qi, 1); render(); }
+  }
+
+  function doSetCorrect(qi, oi) { state.draft.questions[qi].correctIndex = oi; render(); }
+
+  function doSetQuestionImage(qi, file) {
+    if (!file) return;
+    fileToDataUrl(file).then(function (url) { state.draft.questions[qi].image = url; render(); });
+  }
+
+  function doRemoveQuestionImage(qi) { state.draft.questions[qi].image = null; render(); }
+
+  function doSetOptionImage(qi, oi, file) {
+    if (!file) return;
+    fileToDataUrl(file).then(function (url) {
+      if (!state.draft.questions[qi].optionImages) {
+        state.draft.questions[qi].optionImages = [null, null, null, null];
+      }
+      state.draft.questions[qi].optionImages[oi] = url;
+      render();
+    });
+  }
+
+  function doRemoveOptionImage(qi, oi) {
+    if (state.draft.questions[qi].optionImages) {
+      state.draft.questions[qi].optionImages[oi] = null;
+    }
+    render();
+  }
+
+  function doSaveQuiz() {
+    var d = state.draft;
+    var cleanedQuestions = d.questions.filter(function (q) { return q.prompt && q.prompt.trim(); });
+    if (!d.title || !d.title.trim() || cleanedQuestions.length === 0) {
+      d.error = "Add a title and at least one question with text before saving.";
+      render();
+      return;
+    }
+    var cleaned = JSON.parse(JSON.stringify(d));
+    cleaned.questions = cleanedQuestions;
+    delete cleaned.error;
+
+    saveQuizToFirebase(cleaned).then(function () {
+      state.draft = blankQuiz();
+      fetchQuizzes();
+    }).catch(function () {
+      d.error = "Error saving test to database. Try again.";
+      render();
+    });
+  }
+
+  function doFilter(subjectId) { state.filter = subjectId; render(); }
+
+  function doStartPlay(quiz) {
+    if (!quiz.questions || quiz.questions.length === 0) {
+      alert("This test has no questions yet.");
+      return;
+    }
+    state.playState = {
+      quiz: quiz, index: 0, selected: null, revealed: false,
+      mcqCorrect: 0, mcqTotal: 0, frqCorrect: 0, frqTotal: 0,
+      totalCorrect: 0, totalQuestions: quiz.questions.length,
+      userAnswers: [], finished: false,
+      frqResponse: "", frqGrade: null, frqRecordKey: null, frqSynced: null,
+      studentName: "", nameConfirmed: false,
+    };
+    state.nameDraft = "";
+    state.view = "play";
+    render();
+  }
+
+  function doBeginTest() {
+    var name = (state.nameDraft || "").trim();
+    if (!name) return;
+    state.playState.studentName = name;
+    state.playState.nameConfirmed = true;
+    render();
+  }
+
+  function doChoose(idx) {
+    var ps = state.playState;
+    if (ps.revealed) return;
+    var q = ps.quiz.questions[ps.index];
+    var isCorrect = idx === q.correctIndex;
+
+    ps.selected = idx;
+    ps.revealed = true;
+    ps.mcqTotal += 1;
+    if (isCorrect) ps.mcqCorrect += 1;
+    ps.totalCorrect = ps.mcqCorrect + ps.frqCorrect;
+
+    ps.userAnswers[ps.index] = {
+      type: "mcq",
+      prompt: q.prompt,
+      selectedIdx: idx,
+      correctIdx: q.correctIndex,
+      isCorrect: isCorrect,
+      options: q.options,
+      whyCorrect: q.whyCorrect
+    };
+    render();
+  }
+
+  function doNext() {
+    var ps = state.playState;
+    var isLast = ps.index === ps.quiz.questions.length - 1;
+    if (isLast) {
+      ps.finished = true;
+      saveFinalResultToFirebase(ps);
+    } else {
+      ps.index += 1;
+      ps.selected = null;
+      ps.revealed = false;
+      ps.frqResponse = "";
+      ps.frqGrade = null;
+      ps.frqRecordKey = null;
+      ps.frqSynced = null;
+    }
+    render();
+  }
+
+  function doSubmitFrq() {
+    var ps = state.playState;
+    var q = ps.quiz.questions[ps.index];
+    var payload = {
+      studentName: ps.studentName || "Unknown",
+      quizTitle: ps.quiz.title,
+      subject: ps.quiz.subject,
+      questionNumber: ps.index + 1,
+      questionPrompt: q.prompt,
+      response: ps.frqResponse,
+      submittedAt: new Date().toISOString(),
+    };
+
+    ps.revealed = true;
+    ps.frqSynced = null;
+    ps.frqTotal += 1;
+
+    ps.userAnswers[ps.index] = {
+      type: "frq",
+      prompt: q.prompt,
+      frqResponse: ps.frqResponse,
+      sampleAnswer: q.sampleAnswer,
+      isCorrect: false
+    };
+
+    render();
+
+    fetch(FIREBASE_BASE + "/frq-responses.json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(function (res) {
+      return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+    }).then(function (result) {
+      if (result.ok) { ps.frqRecordKey = result.data.name; ps.frqSynced = true; }
+      else { ps.frqSynced = false; }
+      render();
+    }).catch(function () {
+      ps.frqSynced = false;
+      render();
+    });
+  }
+
+  function doGradeFrq(isCorrect) {
+    var ps = state.playState;
+
+    if (ps.frqGrade === true && !isCorrect) {
+      ps.frqCorrect -= 1;
+    } else if (ps.frqGrade !== true && isCorrect) {
+      ps.frqCorrect += 1;
+    }
+
+    ps.frqGrade = isCorrect;
+    ps.totalCorrect = ps.mcqCorrect + ps.frqCorrect;
+    if (ps.userAnswers[ps.index]) {
+      ps.userAnswers[ps.index].isCorrect = isCorrect;
+    }
+
+    render();
+    if (ps.frqRecordKey) {
+      fetch(FIREBASE_BASE + "/frq-responses/" + ps.frqRecordKey + ".json", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selfGrade: isCorrect }),
+      }).catch(function () {});
+    }
+  }
+
+  function onInput(e) {
+    var el = e.target;
+    var field = el.dataset.field;
+    if (!field) return;
+    var qi = el.dataset.qi !== undefined ? parseInt(el.dataset.qi, 10) : null;
+    var oi = el.dataset.oi !== undefined ? parseInt(el.dataset.oi, 10) : null;
+    switch (field) {
+      case "title": state.draft.title = el.value; break;
+      case "prompt": state.draft.questions[qi].prompt = el.value; break;
+      case "optText": state.draft.questions[qi].options[oi] = el.value; break;
+      case "whyWrong":
+        if (!state.draft.questions[qi].whyWrong) state.draft.questions[qi].whyWrong = ["", "", "", ""];
+        state.draft.questions[qi].whyWrong[oi] = el.value;
+        break;
+      case "whyCorrect": state.draft.questions[qi].whyCorrect = el.value; break;
+      case "sampleAnswer": state.draft.questions[qi].sampleAnswer = el.value; break;
+      case "frqResponse": state.playState.frqResponse = el.value; break;
+      case "nameDraft": state.nameDraft = el.value; break;
+    }
+  }
+
+  function onChangeEvt(e) {
+    var el = e.target;
+    if (el.type === "file") {
+      var action = el.dataset.action;
+      var file = el.files && el.files[0];
+      var qi = el.dataset.qi !== undefined ? parseInt(el.dataset.qi, 10) : null;
+      var oi = el.dataset.oi !== undefined ? parseInt(el.dataset.oi, 10) : null;
+      if (action === "q-image") doSetQuestionImage(qi, file);
+      else if (action === "opt-image") doSetOptionImage(qi, oi, file);
+      el.value = "";
+      return;
+    }
+    if (el.tagName === "SELECT" && el.dataset.field === "subject") {
+      state.draft.subject = el.value;
+      return;
+    }
+  }
+
+  function onKeydown(e) {
+    if (e.key === "Enter" && e.target.dataset.field === "nameDraft") {
+      e.preventDefault();
+      doBeginTest();
+    }
+  }
+
+  function onClick(e) {
+    var btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    var action = btn.dataset.action;
+    var qi = btn.dataset.qi !== undefined ? parseInt(btn.dataset.qi, 10) : null;
+    var oi = btn.dataset.oi !== undefined ? parseInt(btn.dataset.oi, 10) : null;
+    var id = btn.dataset.id;
+
+    switch (action) {
+      case "insert-tag": insertFormattingTag(btn.dataset.target, btn.dataset.tag); break;
+      case "secret-title-click": handleTitleClick(); break;
+      case "select-edit-quiz": doSelectEditQuizInEditor(id); break;
+      case "delete-quiz-editor": doDeleteQuizFromEditor(id); break;
+      case "reset-to-new-draft": state.draft = blankQuiz(); render(); break;
+      case "play-quiz":
+        var quiz = state.quizzes.find(function (q) { return String(q.id) === String(id); });
+        if (quiz) doStartPlay(quiz);
+        break;
+      case "filter": doFilter(btn.dataset.subject); break;
+      case "back-to-library": doCancelEdit(); break;
+      case "add-question": doAddQuestion(btn.dataset.type); break;
+      case "remove-question": doRemoveQuestion(qi); break;
+      case "set-correct": doSetCorrect(qi, oi); break;
+      case "remove-q-image": doRemoveQuestionImage(qi); break;
+      case "remove-opt-image": doRemoveOptionImage(qi); break;
+      case "save-quiz": doSaveQuiz(); break;
+      case "begin-test": doBeginTest(); break;
+      case "exit-play": state.playState = null; state.view = "library"; render(); break;
+      case "choose-option": doChoose(oi); break;
+      case "submit-frq": doSubmitFrq(); break;
+      case "grade-frq": doGradeFrq(btn.dataset.correct === "true"); break;
+      case "next-question": doNext(); break;
+      case "restart-test": doStartPlay(state.playState.quiz); break;
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var app = document.getElementById("app");
+    app.addEventListener("click", onClick);
+    app.addEventListener("change", onChangeEvt);
+    app.addEventListener("input", onInput);
+    app.addEventListener("keydown", onKeydown);
+    fetchQuizzes();
+  });
+})();
+</script>
+</body>
+</html>
